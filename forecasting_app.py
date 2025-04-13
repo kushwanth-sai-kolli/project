@@ -126,4 +126,4 @@ if uploaded_file:
         mae = mean_absolute_error(actual, forecast)
         mse = mean_squared_error(actual, forecast)
         st.metric("Mean Absolute Error (MAE)", f"{mae:.2f}")
-        st.metric("Mean Squared Error (MSE)", f"{mse:.2f}"
+        st.metric("Mean Squared Error (MSE)", f"{mse:.2f}")
