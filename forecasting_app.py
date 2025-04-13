@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -61,25 +60,20 @@ if uploaded_file:
     model_choice = st.selectbox("Choose Forecasting Model", ["Holt's Linear Trend", "ARIMA", "Prophet", "LSTM"])
 
     monthly = df.set_index('ds').resample('M').sum()['y'].dropna()
-    scaler = MinMaxScaler()
-    monthly_scaled = pd.Series(scaler.fit_transform(monthly.values.reshape(-1, 1)).flatten(), index=monthly.index)
-
-    train = monthly_scaled.iloc[:-6]
-    test = monthly_scaled.iloc[-6:]
+    train = monthly.iloc[:-6]
+    test = monthly.iloc[-6:]
 
     forecast, actual = None, None
 
     if model_choice == "Holt's Linear Trend":
         model = Holt(train).fit()
-        forecast_scaled = model.forecast(steps=len(test))
-        forecast = scaler.inverse_transform(forecast_scaled.values.reshape(-1, 1)).flatten()
-        actual = scaler.inverse_transform(test.values.reshape(-1, 1)).flatten()
+        forecast = model.forecast(steps=len(test))
+        actual = test.values
 
     elif model_choice == "ARIMA":
         model = ARIMA(train, order=(1,1,1)).fit()
-        forecast_scaled = model.forecast(steps=len(test))
-        forecast = scaler.inverse_transform(forecast_scaled.values.reshape(-1, 1)).flatten()
-        actual = scaler.inverse_transform(test.values.reshape(-1, 1)).flatten()
+        forecast = model.forecast(steps=len(test))
+        actual = test.values
 
     elif model_choice == "Prophet":
         prophet_df = pd.DataFrame({'ds': monthly.index, 'y': monthly.values})
@@ -94,20 +88,23 @@ if uploaded_file:
         st.pyplot(fig3)
 
     elif model_choice == "LSTM":
+        look_back = 12
         data_lstm = monthly.values.reshape(-1, 1)
+
+        # Scale only for LSTM
         scaler_lstm = MinMaxScaler()
         scaled_data = scaler_lstm.fit_transform(data_lstm)
 
-        generator = TimeseriesGenerator(scaled_data, scaled_data, length=12, batch_size=1)
+        generator = TimeseriesGenerator(scaled_data, scaled_data, length=look_back, batch_size=1)
 
         model = Sequential()
-        model.add(LSTM(50, activation='relu', input_shape=(12, 1)))
+        model.add(LSTM(50, activation='relu', input_shape=(look_back, 1)))
         model.add(Dense(1))
         model.compile(optimizer='adam', loss='mse')
         model.fit(generator, epochs=10, verbose=0)
 
         predictions = []
-        current_batch = scaled_data[-12:].reshape(1, 12, 1)
+        current_batch = scaled_data[-look_back:].reshape(1, look_back, 1)
         for i in range(6):
             pred = model.predict(current_batch)[0]
             predictions.append(pred)
@@ -129,4 +126,4 @@ if uploaded_file:
         mae = mean_absolute_error(actual, forecast)
         mse = mean_squared_error(actual, forecast)
         st.metric("Mean Absolute Error (MAE)", f"{mae:.2f}")
-        st.metric("Mean Squared Error (MSE)", f"{mse:.2f}")
+        st.metric("Mean Squared Error (MSE)", f"{mse:.2f}"
