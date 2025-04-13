@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
 from statsmodels.tsa.seasonal import seasonal_decompose
 from statsmodels.tsa.holtwinters import Holt
 from statsmodels.tsa.arima.model import ARIMA
@@ -11,6 +12,7 @@ from prophet import Prophet
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense
 from tensorflow.keras.preprocessing.sequence import TimeseriesGenerator
+from scipy.stats import yeojohnson
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -20,10 +22,9 @@ st.title("📊 Hotel Booking Time Series Forecasting App")
 uploaded_file = st.file_uploader("Upload hotel_bookings.csv", type="csv")
 
 if uploaded_file:
-    # Load dataset
     df = pd.read_csv(uploaded_file)
 
-    # Clean and preprocess as in the notebook
+    # Preprocessing
     df['children'] = df['children'].fillna(df['children'].median())
     df['country'] = df['country'].fillna(df['country'].mode()[0])
     df['agent'] = df['agent'].notna().astype(int)
@@ -37,21 +38,36 @@ if uploaded_file:
         'September': 9, 'October': 10, 'November': 11, 'December': 12
     }).astype(int)
 
-    # Feature engineering
     df['arrival_date'] = pd.to_datetime(
         df['arrival_date_year'].astype(str) + '-' +
         df['arrival_date_month'].astype(str) + '-' +
         df['arrival_date_day_of_month'].astype(str),
         errors='coerce'
     )
+
     df['stay_duration'] = df['stays_in_weekend_nights'] + df['stays_in_week_nights']
     df['booking_price'] = df['adr'] * df['stay_duration']
-    df = df[['arrival_date', 'booking_price']].dropna()
-    df = df.rename(columns={'arrival_date': 'ds', 'booking_price': 'y'})
-    df = df.sort_values('ds')
+    df.drop(columns=['adr'], inplace=True)
 
-    # Monthly resampling
-    monthly = df.set_index('ds').resample('M').sum()['y'].dropna()
+    # Apply Yeo-Johnson transformation
+    exclude_cols = ['arrival_date_year', 'arrival_date_month']
+    df_transformed = df.copy()
+    numeric_cols = df_transformed.select_dtypes(include=['number']).columns
+    transform_cols = [col for col in numeric_cols if col not in exclude_cols]
+
+    for col in transform_cols:
+        df_transformed[col], _ = yeojohnson(df_transformed[col])
+
+    # Restore columns
+    df_transformed['arrival_date_year'] = df['arrival_date_year']
+    df_transformed['arrival_date_month'] = df['arrival_date_month']
+    df_transformed['arrival_date'] = df['arrival_date']
+
+    # Prepare monthly transformed time series
+    df_transformed = df_transformed[['arrival_date', 'booking_price']].dropna()
+    df_transformed = df_transformed.rename(columns={'arrival_date': 'ds', 'booking_price': 'y'})
+    df_transformed = df_transformed.sort_values('ds')
+    monthly = df_transformed.set_index('ds').resample('M').sum()['y'].dropna()
 
     st.subheader("1️⃣ Preview Cleaned & Resampled Data")
     st.line_chart(monthly)
