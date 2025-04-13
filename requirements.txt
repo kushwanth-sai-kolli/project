@@ -1,4 +1,9 @@
-keras
-tensorflow
-statsmodels
+streamlit
+pandas
+numpy
 matplotlib
+statsmodels
+scikit-learn
+prophet
+tensorflow
+keras
