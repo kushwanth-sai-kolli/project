@@ -22,13 +22,25 @@ uploaded_file = st.file_uploader("Upload hotel_bookings.csv", type="csv")
 if uploaded_file:
     # Load dataset
     df = pd.read_csv(uploaded_file)
-    st.subheader("1️⃣ Preview Uploaded Data")
-    st.write(df.head())
 
-    # Data Preprocessing
+    # Clean and preprocess as in the notebook
+    df['children'] = df['children'].fillna(df['children'].median())
+    df['country'] = df['country'].fillna(df['country'].mode()[0])
+    df['agent'] = df['agent'].notna().astype(int)
+    df['company'] = df['company'].notna().astype(int)
+    df.dropna(inplace=True)
+
+    df['hotel'] = df['hotel'].replace({'Resort Hotel': 0, 'City Hotel': 1}).astype(int)
+    df['arrival_date_month'] = df['arrival_date_month'].replace({
+        'January': 1, 'February': 2, 'March': 3, 'April': 4,
+        'May': 5, 'June': 6, 'July': 7, 'August': 8,
+        'September': 9, 'October': 10, 'November': 11, 'December': 12
+    }).astype(int)
+
+    # Feature engineering
     df['arrival_date'] = pd.to_datetime(
         df['arrival_date_year'].astype(str) + '-' +
-        df['arrival_date_month'] + '-' +
+        df['arrival_date_month'].astype(str) + '-' +
         df['arrival_date_day_of_month'].astype(str),
         errors='coerce'
     )
@@ -40,6 +52,8 @@ if uploaded_file:
 
     # Monthly resampling
     monthly = df.set_index('ds').resample('M').sum()['y'].dropna()
+
+    st.subheader("1️⃣ Preview Cleaned & Resampled Data")
     st.line_chart(monthly)
 
     st.subheader("2️⃣ Time Series Decomposition")
@@ -61,10 +75,8 @@ if uploaded_file:
     st.subheader("3️⃣ Forecasting & Accuracy Evaluation")
     model_choice = st.selectbox("Choose Forecasting Model", ["Holt's Linear Trend", "ARIMA", "Prophet", "LSTM"])
 
-    # Define train-test split (first 19 months for training, last 6 months for testing)
     train = monthly.iloc[:-6]
     test = monthly.iloc[-6:]
-
     forecast, actual = None, None
 
     if model_choice == "Holt's Linear Trend":
@@ -93,7 +105,6 @@ if uploaded_file:
         look_back = 12
         data_lstm = monthly.values.reshape(-1, 1)
 
-        # Scale only for LSTM
         scaler_lstm = MinMaxScaler()
         scaled_data = scaler_lstm.fit_transform(data_lstm)
 
