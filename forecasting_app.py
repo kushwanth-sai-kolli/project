@@ -17,35 +17,37 @@ warnings.filterwarnings("ignore")
 st.set_page_config(layout="wide")
 st.title("📊 Hotel Booking Time Series Forecasting App")
 
-uploaded_file = st.file_uploader("hotel_bookings.csv", type="csv")
+uploaded_file = st.file_uploader("Upload hotel_bookings.csv", type="csv")
 
 if uploaded_file:
+    # Load dataset
     df = pd.read_csv(uploaded_file)
     st.subheader("1️⃣ Preview Uploaded Data")
     st.write(df.head())
 
+    # Data Preprocessing
     df['arrival_date'] = pd.to_datetime(
         df['arrival_date_year'].astype(str) + '-' +
         df['arrival_date_month'] + '-' +
         df['arrival_date_day_of_month'].astype(str),
         errors='coerce'
     )
-
     df['stay_duration'] = df['stays_in_weekend_nights'] + df['stays_in_week_nights']
     df['booking_price'] = df['adr'] * df['stay_duration']
-
     df = df[['arrival_date', 'booking_price']].dropna()
     df = df.rename(columns={'arrival_date': 'ds', 'booking_price': 'y'})
     df = df.sort_values('ds')
 
-    st.line_chart(df.set_index('ds')['y'])
+    # Monthly resampling
+    monthly = df.set_index('ds').resample('M').sum()['y'].dropna()
+    st.line_chart(monthly)
 
     st.subheader("2️⃣ Time Series Decomposition")
     model_type = st.radio("Choose Decomposition Type", ["Additive", "Multiplicative"])
     freq = st.slider("Select Seasonal Period (e.g., 30 for monthly)", 1, 365, 30)
 
     try:
-        decomposition = seasonal_decompose(df.set_index("ds")["y"], model=model_type.lower(), period=freq)
+        decomposition = seasonal_decompose(monthly, model=model_type.lower(), period=freq)
         fig, ax = plt.subplots(4, 1, figsize=(10, 8))
         decomposition.observed.plot(ax=ax[0], title="Observed")
         decomposition.trend.plot(ax=ax[1], title="Trend")
@@ -59,7 +61,7 @@ if uploaded_file:
     st.subheader("3️⃣ Forecasting & Accuracy Evaluation")
     model_choice = st.selectbox("Choose Forecasting Model", ["Holt's Linear Trend", "ARIMA", "Prophet", "LSTM"])
 
-    monthly = df.set_index('ds').resample('M').sum()['y'].dropna()
+    # Define train-test split (first 19 months for training, last 6 months for testing)
     train = monthly.iloc[:-6]
     test = monthly.iloc[-6:]
 
